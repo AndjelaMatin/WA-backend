@@ -1,15 +1,24 @@
 import express from 'express'
-import { podaci } from './store.js'
+import connect from './db.js'
 const app = express()
 const port = 3200
 
 app.use(express.json());
+// 1. Prikaz svih recepata
+app.get('/recepti', async (req, res) => {
+  let db = await connect()
+  let cursor = await db.collection("recepti").find()
+  let results = await cursor.toArray()
 
+  res.json(results)
+});
+
+/* 
 // 1. Prikaz svih recepata
 app.get('/recepti', (req, res) => res.json(podaci.recepti));
 
 // 2. Prikaz pojedinačnog recepta
-app.get('/recepti/:id', (req, res) => {
+app.get('/recept/:id', (req, res) => {
   const idRecepta = parseInt(req.params.id);
   const recept = podaci.recepti.find((r) => r.id === idRecepta);
 
@@ -21,7 +30,7 @@ app.get('/recepti/:id', (req, res) => {
 });
 
 // 3. Dodavanje recepta
-app.post('/recepti', (req, res) => {
+app.post('/recept', (req, res) => {
   const korisnik = podaci.korisnici[0];
 
   const noviRecept = {
@@ -38,7 +47,7 @@ app.post('/recepti', (req, res) => {
 });
 
 // 4. Označavanje recepta kao "sviđa mi se" (like)
-app.post('/recepti/:id/sviđaMiSe', (req, res) => {
+app.post('/recept/:id/sviđaMiSe', (req, res) => {
   const idRecepta = parseInt(req.params.id);
   const recept = podaci.recepti.find((r) => r.id === idRecepta);
 
@@ -71,7 +80,7 @@ app.get('/recepti/pretraga', (req, res) => {
   });
   
   // 6. Dodavanje slika uz recepte
-  app.post('/recepti', (req, res) => {
+  app.post('/recept', (req, res) => {
     const korisnik = podaci.korisnici[0];
   
     const noviRecept = {
@@ -88,7 +97,7 @@ app.get('/recepti/pretraga', (req, res) => {
   });
   
   // 7. Komentiranje recepata
-  app.post('/recepti/:id/komentiraj', (req, res) => {
+  app.post('/recept/:id/komentiraj', (req, res) => {
     const idRecepta = parseInt(req.params.id);
     const recept = podaci.recepti.find((r) => r.id === idRecepta);
   
@@ -108,7 +117,7 @@ app.get('/recepti/pretraga', (req, res) => {
   });
   
   // 8. Dodavanje u kolekciju omiljenih recepata
-  app.post('/korisnici/:id/favoriti', (req, res) => {
+  app.post('/korisnik/:id/favoriti', (req, res) => {
     const idKorisnika = parseInt(req.params.id);
     const korisnik = podaci.korisnici.find((k) => k.id === idKorisnika);
   
@@ -125,5 +134,5 @@ app.get('/recepti/pretraga', (req, res) => {
       res.status(404).json({ greška: 'Korisnik nije pronađen' });
     }
   });  
-
+ */
 app.listen(port, () => console.log(`Slušam na portu ${port}`));
