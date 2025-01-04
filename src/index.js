@@ -1,19 +1,44 @@
 import express from 'express'
 import connect from './db.js'
+import cors from "cors"
 const app = express()
-const port = 3200
+const port = 3000
 
 app.use(express.json());
+app.use(cors())
 // 1. Prikaz svih recepata
+
 app.get('/recepti', async (req, res) => {
   let db = await connect()
-  let cursor = await db.collection("recepti").find()
-  let results = await cursor.toArray()
+  let query = req.query;
 
+  let selekcija = {}
+
+  if(query.title){
+    selekcija.title = new RegExp(query.title)
+  }
+
+  let cursor = await db.collection("recepti").find(selekcija)
+  let results = await cursor.toArray()
+  
   res.json(results)
 });
+app.get('/recepti/:id', async (req, res) => {
+  let db = await connect()
+  let query = req.query;
 
-/* 
+  let selekcija = {}
+
+  if(query._id){
+    selekcija.id = new RegExp(query._id)
+  }
+
+  let cursor = await db.collection("recepti").find(selekcija)
+  let results = await cursor.toArray()
+  
+  res.json(results)
+});
+ 
 // 1. Prikaz svih recepata
 app.get('/recepti', (req, res) => res.json(podaci.recepti));
 
@@ -134,5 +159,5 @@ app.get('/recepti/pretraga', (req, res) => {
       res.status(404).json({ greška: 'Korisnik nije pronađen' });
     }
   });  
- */
+ 
 app.listen(port, () => console.log(`Slušam na portu ${port}`));
