@@ -1,10 +1,30 @@
-import express from 'express'
-import { podaci } from './store.js'
-const app = express()
-const port = 3200
+import express from 'express';
+import dotenv from 'dotenv';
+import recipesRoutes from './routes/recepti.js';
+import cors from 'cors';
+// Učitaj `.env` pre pristupa promenljivama
+dotenv.config(); 
 
-app.use(express.json());
+const app = express();
+const corsOptions = {
+  origin: 'http://localhost:8080',
+  methods: 'GET,POST,PUT,DELETE', // Dozvoljene HTTP metode
+  allowedHeaders: 'Content-Type,Authorization', // Dozvoljena zaglavlja
+};
+app.use(cors(corsOptions));
 
+app.use('/api', recipesRoutes);
+
+const port = process.env.PORT || 5000;
+const uri = process.env.MONGO_URI;
+if (!uri) {
+  throw new Error("MONGO_URI nije definisan u .env fajlu!");
+}
+
+app.listen(port, () => {
+  console.log(`Server je pokrenut na http://localhost:${port}`);
+}); 
+/* 
 // 1. Prikaz svih recepata
 app.get('/recepti', (req, res) => res.json(podaci.recepti));
 
@@ -125,5 +145,6 @@ app.get('/recepti/pretraga', (req, res) => {
       res.status(404).json({ greška: 'Korisnik nije pronađen' });
     }
   });  
+  app.listen(port, () => console.log(`Slušam na portu ${port}`));
+ */
 
-app.listen(port, () => console.log(`Slušam na portu ${port}`));
