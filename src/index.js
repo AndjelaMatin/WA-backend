@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 import recipesRoutes from './routes/recepti.js';
+import shoppingListaRoutes from "./routes/shoppingLista.js";
 import { connectToStore, closeStore } from './store/store.js';
 
 dotenv.config();
@@ -11,12 +12,12 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
-app.use(cors({ origin: 'http://localhost:8080' }));
+app.use(cors());
 app.use(bodyParser.json());
 
 // Rute
 app.use('/api', recipesRoutes);
-
+app.use('/api/shoppingLista', shoppingListaRoutes);
 // Pokretanje servera
 const startServer = async () => {
   try {
