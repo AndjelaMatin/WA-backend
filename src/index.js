@@ -1,29 +1,41 @@
 import express from 'express';
 import dotenv from 'dotenv';
-import recipesRoutes from './routes/recepti.js';
 import cors from 'cors';
-// Učitaj `.env` pre pristupa promenljivama
-dotenv.config(); 
+import bodyParser from 'body-parser';
+import recipesRoutes from './routes/recepti.js';
+import { connectToStore, closeStore } from './store/store.js';
+
+dotenv.config();
 
 const app = express();
-const corsOptions = {
-  origin: 'http://localhost:8080',
-  methods: 'GET,POST,PUT,DELETE', // Dozvoljene HTTP metode
-  allowedHeaders: 'Content-Type,Authorization', // Dozvoljena zaglavlja
-};
-app.use(cors(corsOptions));
+const PORT = process.env.PORT || 5000;
 
+// Middleware
+app.use(cors({ origin: 'http://localhost:8080' }));
+app.use(bodyParser.json());
+
+// Rute
 app.use('/api', recipesRoutes);
 
-const port = process.env.PORT || 5000;
-const uri = process.env.MONGO_URI;
-if (!uri) {
-  throw new Error("MONGO_URI nije definisan u .env fajlu!");
-}
+// Pokretanje servera
+const startServer = async () => {
+  try {
+    await connectToStore();
+    app.listen(PORT, () => console.log(`Server pokrenut na http://localhost:${PORT}`));
+  } catch (error) {
+    console.error('Greška pri pokretanju servera:', error);
+  }
+};
 
-app.listen(port, () => {
-  console.log(`Server je pokrenut na http://localhost:${port}`);
-}); 
+// Zatvaranje veze pri prekidu servera
+process.on('SIGINT', async () => {
+  console.log('Zatvaranje servera...');
+  await closeStore();
+  process.exit(0);
+});
+
+startServer();
+
 /* 
 // 1. Prikaz svih recepata
 app.get('/recepti', (req, res) => res.json(podaci.recepti));

@@ -1,43 +1,64 @@
-import dotenv from 'dotenv';
-dotenv.config(); 
-
 import express from 'express';
-import { MongoClient } from 'mongodb';
+import { getCollection } from '../store/store.js';
 
 const router = express.Router();
-const uri = process.env.MONGO_URI;
 
-if (!uri) {
-  throw new Error("MONGO_URI nije definisan u .env fajlu!");
-}
-
-const client = new MongoClient(uri);
-
+// Dohvaćanje svih recepata
 router.get('/recepti', async (req, res) => {
   try {
-    await client.connect();
-    const database = client.db('naseMaleSlastice');
-    const collection = database.collection('recepti');
-
+    const collection = await getCollection('recepti');
     const recepti = await collection.find({}).toArray();
     res.json(recepti);
   } catch (error) {
-    console.error('Greška u ruti /api/recepti:', error); 
-    res.status(500).send('Došlo je do greške na serveru');
-  } finally {
-    await client.close();
+    console.error('Greška pri dohvaćanju recepata:', error);
+    res.status(500).json({ message: 'Došlo je do greške na serveru' });
   }
 });
+
+// Dohvaćanje pojedinačnog recepta
 router.get('/recepti/:id', async (req, res) => {
   try {
-    const recept = await client.db('naseMaleSlastice').collection('recepti').findById(req.params.id); 
+    const collection = await getCollection('recepti');
+    const recept = await collection.findOne({ _id: req.params.id });
+
     if (!recept) {
       return res.status(404).json({ message: 'Recept nije pronađen' });
     }
-    res.json(recept); 
+    res.json(recept);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Greška na serveru' });
+    console.error('Greška pri dohvaćanju recepta:', error);
+    res.status(500).json({ message: 'Došlo je do greške na serveru' });
   }
 });
+
+// Dodavanje novog recepta
+router.post('/recepti', async (req, res) => {
+  try {
+    const { naziv, sastojci, upute, slika, porcije } = req.body;
+
+    // Validacija unosa
+    if (!naziv || !sastojci || !upute || !Array.isArray(upute) || !Array.isArray(sastojci)) {
+      return res.status(400).json({ message: 'Molimo popunite sva potrebna polja.' });
+    }
+
+    const noviRecept = {
+      naziv,
+      sastojci,
+      upute,
+      slika: slika || '',
+      porcije: porcije || 1,
+      svidanja: 0,
+      komentari: [],
+    };
+
+    const collection = await getCollection('recepti');
+    const result = await collection.insertOne(noviRecept);
+
+    res.status(201).json({ ...noviRecept, _id: result.insertedId });
+  } catch (error) {
+    console.error('Greška pri dodavanju recepta:', error);
+    res.status(500).json({ message: 'Došlo je do greške na serveru' });
+  }
+});
+
 export default router;
