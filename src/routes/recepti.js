@@ -1,6 +1,6 @@
 import express from 'express';
 import { getCollection } from '../store/store.js';
-
+import { ObjectId } from 'mongodb';
 const router = express.Router();
 
 // Dohvaćanje svih recepata
@@ -18,12 +18,20 @@ router.get('/recepti', async (req, res) => {
 // Dohvaćanje pojedinačnog recepta
 router.get('/recepti/:id', async (req, res) => {
   try {
+    const receptId = req.params.id;
+
+    // Provjera da li je ID valjan ObjectId
+    if (!ObjectId.isValid(receptId)) {
+      return res.status(400).json({ message: 'Neispravan ID recepta' });
+    }
+
     const collection = await getCollection('recepti');
-    const recept = await collection.findOne({ _id: req.params.id });
+    const recept = await collection.findOne({ _id: new ObjectId(receptId) });
 
     if (!recept) {
       return res.status(404).json({ message: 'Recept nije pronađen' });
     }
+
     res.json(recept);
   } catch (error) {
     console.error('Greška pri dohvaćanju recepta:', error);
