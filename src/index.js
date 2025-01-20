@@ -18,6 +18,7 @@ app.use(bodyParser.json());
 // Rute
 app.use('/api', recipesRoutes);
 app.use('/api/shoppingLista', shoppingListaRoutes);
+
 // Pokretanje servera
 const startServer = async () => {
   try {
@@ -37,39 +38,7 @@ process.on('SIGINT', async () => {
 
 startServer();
 
-/* 
-// 1. Prikaz svih recepata
-app.get('/recepti', (req, res) => res.json(podaci.recepti));
-
-// 2. Prikaz pojedinačnog recepta
-app.get('/recepti/:id', (req, res) => {
-  const idRecepta = parseInt(req.params.id);
-  const recept = podaci.recepti.find((r) => r.id === idRecepta);
-
-  if (recept) {
-    res.json(recept);
-  } else {
-    res.status(404).json({ greška: 'Recept nije pronađen' });
-  }
-});
-
-// 3. Dodavanje recepta
-app.post('/recepti', (req, res) => {
-  const korisnik = podaci.korisnici[0];
-
-  const noviRecept = {
-    id: podaci.recepti.length + 1,
-    ...req.body,
-    sviđanja: 0,
-    komentari: [],
-    slika: req.body.slika || null,
-    porcije: req.body.porcije || 1,
-  };
-
-  podaci.recepti.push(noviRecept);
-  res.status(201).json(noviRecept);
-});
-
+/*
 // 4. Označavanje recepta kao "sviđa mi se" (like)
 app.post('/recepti/:id/sviđaMiSe', (req, res) => {
   const idRecepta = parseInt(req.params.id);
@@ -90,36 +59,6 @@ app.post('/recepti/:id/sviđaMiSe', (req, res) => {
   }
 });
 
-// 5. Pretraživanje recepata
-app.get('/recepti/pretraga', (req, res) => {
-    const kriteriji = req.query;
-    const rezultati = podaci.recepti.filter((recept) => {
-      return (
-        recept.naziv.includes(kriteriji.naziv) ||
-        recept.sastojci.some((sastojak) => sastojak.includes(kriteriji.sastojak))
-      );
-    });
-  
-    res.json(rezultati);
-  });
-  
-  // 6. Dodavanje slika uz recepte
-  app.post('/recepti', (req, res) => {
-    const korisnik = podaci.korisnici[0];
-  
-    const noviRecept = {
-      id: podaci.recepti.length + 1,
-      ...req.body,
-      sviđanja: 0,
-      komentari: [],
-      slika: req.body.slika || null,
-      porcije: req.body.porcije || 1,
-    };
-  
-    podaci.recepti.push(noviRecept);
-    res.status(201).json(noviRecept);
-  });
-  
   // 7. Komentiranje recepata
   app.post('/recepti/:id/komentiraj', (req, res) => {
     const idRecepta = parseInt(req.params.id);
