@@ -1,6 +1,7 @@
 import express from 'express';
 import { getCollection } from '../store/store.js';
 import { ObjectId } from 'mongodb';
+import authMiddleware from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -60,17 +61,16 @@ router.get('/recepti/:id', async (req, res) => {
   }
 });
 
-
-
 // Dodavanje novog recepta
-router.post('/recepti', async (req, res) => {
+router.post('/recepti', authMiddleware, async (req, res) => {
   try {
     const { naziv, sastojci, upute, slika, porcije } = req.body;
 
-    // Validacija unosa
-    if (!naziv || !sastojci || !upute || !Array.isArray(upute) || !Array.isArray(sastojci)) {
+    if (!naziv || !sastojci || !upute || !Array.isArray(sastojci) || !Array.isArray(upute)) {
       return res.status(400).json({ message: 'Molimo popunite sva potrebna polja.' });
     }
+
+    const korisnikId = req.user.id; // Dohvaćanje korisničkog ID-a iz tokena
 
     const noviRecept = {
       naziv,
@@ -80,6 +80,7 @@ router.post('/recepti', async (req, res) => {
       porcije: porcije || 1,
       svidanja: 0,
       komentari: [],
+      korisnikId: new ObjectId(korisnikId), // Referenca na korisnika
     };
 
     const collection = await getCollection('recepti');
@@ -91,5 +92,51 @@ router.post('/recepti', async (req, res) => {
     res.status(500).json({ message: 'Došlo je do greške na serveru' });
   }
 });
+
+router.get('/mojirecepti', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id; // Dohvat ID korisnika iz tokena
+    // Provjerite je li ID validan
+    if (!ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: "Neispravan korisnički ID." });
+    }
+
+    const db = await getCollection('recepti');
+    const userRecipes = await db.find({ korisnikId: new ObjectId(userId) }).toArray();
+
+    if (!userRecipes || userRecipes.length === 0) {
+      return res.status(404).json({ message: "Nema recepata za ovog korisnika." });
+    }
+
+    res.status(200).json(userRecipes);
+  } catch (error) {
+    console.error("Greška pri dohvaćanju recepata korisnika:", error);
+    res.status(500).json({ message: "Greška pri dohvaćanju recepata" });
+  }
+});
+
+//Brisanje recepta
+router.delete('/brisanjerecepta/:id', authMiddleware, async (req, res) => {
+  const receptId = req.params.id;
+
+  if (!ObjectId.isValid(receptId)) {
+    return res.status(400).json({ message: 'Neispravan ID recepta' });
+  }
+
+  const db = await getCollection('recepti');
+  const recept = await db.findOne({ _id: new ObjectId(receptId) });
+
+  if (!recept) {
+    return res.status(404).json({ message: 'Recept nije pronađen' });
+  }
+
+  if (recept.korisnikId.toString() !== req.user.id) {
+    return res.status(403).json({ message: 'Nemate dopuštenje za brisanje ovog recepta' });
+  }
+
+  await db.deleteOne({ _id: new ObjectId(receptId) });
+  res.status(200).json({ message: 'Recept uspješno obrisan' });
+});
+
 
 export default router;

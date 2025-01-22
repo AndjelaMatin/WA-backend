@@ -1,7 +1,6 @@
 import express from "express";
 import { getCollection } from "../store/store.js";
 import { ObjectId } from "mongodb";
-
 const router = express.Router();
 
 // ID shopping liste - koristimo statični ID za sada
