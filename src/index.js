@@ -18,7 +18,7 @@ app.use(express.json());
 app.use('/api', recipesRoutes);
 app.use('/api/shoppingLista', shoppingListaRoutes);
 app.use('/api/auth', authRoutes);
-console.log('Auth routes loaded.')
+
 export const getCollection = async (collectionName) => {
 const db = await connectToStore();
 return db.collection(collectionName);

@@ -62,13 +62,15 @@ router.get('/recepti/:id', async (req, res) => {
 });
 
 // Dodavanje novog recepta
-router.post('/recepti',authMiddleware, async (req, res) => {
+router.post('/recepti', authMiddleware, async (req, res) => {
   try {
     const { naziv, sastojci, upute, slika, porcije } = req.body;
 
-    if (!naziv || !sastojci || !upute || !Array.isArray(upute) || !Array.isArray(sastojci)) {
+    if (!naziv || !sastojci || !upute || !Array.isArray(sastojci) || !Array.isArray(upute)) {
       return res.status(400).json({ message: 'Molimo popunite sva potrebna polja.' });
     }
+
+    const korisnikId = req.user.id; // Dohvaćanje korisničkog ID-a iz tokena
 
     const noviRecept = {
       naziv,
@@ -78,6 +80,7 @@ router.post('/recepti',authMiddleware, async (req, res) => {
       porcije: porcije || 1,
       svidanja: 0,
       komentari: [],
+      korisnik: new ObjectId(korisnikId), // Referenca na korisnika
     };
 
     const collection = await getCollection('recepti');

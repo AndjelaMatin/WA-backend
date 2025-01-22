@@ -74,5 +74,43 @@ router.get('/korisnici', authMiddleware, async (req, res) => {
     res.status(500).json({ message: 'Error fetching user data', error });
   }
 });
+router.put('/korisnici', authMiddleware, async (req, res) => {
+  const { name, currentPassword, newPassword } = req.body;
+
+  try {
+    const userId = req.user.id;
+    const db = await connectToStore();
+    const collection = db.collection('korisnici');
+
+    const user = await collection.findOne({ _id: new mongodb.ObjectId(userId) });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (currentPassword && newPassword) {
+      const isMatch = await bcrypt.compare(currentPassword, user.password);
+      if (!isMatch) {
+        return res.status(400).json({ message: 'Current password is incorrect' });
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await collection.updateOne(
+        { _id: new mongodb.ObjectId(userId) },
+        { $set: { password: hashedPassword, updatedAt: new Date() } }
+      );
+    }
+
+    if (name) {
+      await collection.updateOne(
+        { _id: new mongodb.ObjectId(userId) },
+        { $set: { name, updatedAt: new Date() } }
+      );
+    }
+
+    res.status(200).json({ message: 'User data updated successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating user data', error });
+  }
+});
 
 export default router;
