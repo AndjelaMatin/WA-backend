@@ -1,6 +1,7 @@
 import express from 'express';
 import { getCollection } from '../store/store.js';
 import { ObjectId } from 'mongodb';
+import authMiddleware from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -60,14 +61,11 @@ router.get('/recepti/:id', async (req, res) => {
   }
 });
 
-
-
 // Dodavanje novog recepta
-router.post('/recepti', async (req, res) => {
+router.post('/recepti',authMiddleware, async (req, res) => {
   try {
     const { naziv, sastojci, upute, slika, porcije } = req.body;
 
-    // Validacija unosa
     if (!naziv || !sastojci || !upute || !Array.isArray(upute) || !Array.isArray(sastojci)) {
       return res.status(400).json({ message: 'Molimo popunite sva potrebna polja.' });
     }

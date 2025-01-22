@@ -12,27 +12,26 @@ if (!uri) {
 let client;
 let database;
 
-// Funkcija za spajanje na bazu
 export const connectToStore = async () => {
   if (!client || !database) {
     client = new MongoClient(uri, { useUnifiedTopology: true });
     await client.connect();
-    database = client.db('naseMaleSlastice'); // Ime baze podataka
+    database = client.db('naseMaleSlastice'); 
     console.log('Povezan na MongoDB');
   }
   return database;
 };
 
-// Funkcija za dobivanje kolekcije
-export const getCollection = async (collectionName) => {
-  const db = await connectToStore();
-  return db.collection(collectionName);
-};
-
-// Funkcija za zatvaranje veze
 export const closeStore = async () => {
   if (client) {
     await client.close();
+    client = null;
+    database = null;
     console.log('Veza s MongoDB zatvorena');
   }
+};
+
+export const getCollection = async (collectionName) => {
+  const db = await connectToStore();
+  return db.collection(collectionName);
 };
