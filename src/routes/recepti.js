@@ -92,7 +92,7 @@ router.post('/recepti', authMiddleware, async (req, res) => {
     res.status(500).json({ message: 'Došlo je do greške na serveru' });
   }
 });
-
+// Dohvaćanje svojih recepata
 router.get('/mojirecepti', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id; // Dohvat ID korisnika iz tokena
@@ -137,6 +137,42 @@ router.delete('/brisanjerecepta/:id', authMiddleware, async (req, res) => {
   await db.deleteOne({ _id: new ObjectId(receptId) });
   res.status(200).json({ message: 'Recept uspješno obrisan' });
 });
+// Ažuriranje recepta
+router.put('/recepti/:id', authMiddleware, async (req, res) => {
+  const receptId = req.params.id;
 
+  if (!ObjectId.isValid(receptId)) {
+    return res.status(400).json({ message: 'Neispravan ID recepta' });
+  }
+
+  const azuriranja = req.body;
+
+  if (Object.keys(azuriranja).length === 0) {
+    return res.status(400).json({ message: 'Nema promjena za ažuriranje.' });
+  }
+
+  try {
+    const db = await getCollection('recepti');
+    const recept = await db.findOne({ _id: new ObjectId(receptId) });
+
+    if (!recept) {
+      return res.status(404).json({ message: 'Recept nije pronađen' });
+    }
+
+    if (recept.korisnikId.toString() !== req.user.id) {
+      return res.status(403).json({ message: 'Nemate dopuštenje za uređivanje ovog recepta' });
+    }
+
+    await db.updateOne(
+      { _id: new ObjectId(receptId) },
+      { $set: azuriranja }
+    );
+
+    res.status(200).json({ message: 'Recept uspješno ažuriran' });
+  } catch (error) {
+    console.error('Greška pri ažuriranju recepta:', error);
+    res.status(500).json({ message: 'Došlo je do greške na serveru.' });
+  }
+});
 
 export default router;
