@@ -3,10 +3,11 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 import recipesRoutes from './routes/recepti.js';
-import shoppingListaRoutes from "./routes/shoppingLista.js";
 import { connectToStore } from './store/store.js';
 import mongoose from 'mongoose';
 import authRoutes from './routes/auth.js';
+import shoppingListRoutes from './routes/shoppingLista.js';
+
 dotenv.config();
 
 const app = express();
@@ -16,7 +17,7 @@ app.use(bodyParser.json());
 
 app.use(express.json());
 app.use('/api', recipesRoutes);
-app.use('/api/shoppingLista', shoppingListaRoutes);
+app.use('/api/shoppingLista', shoppingListRoutes);
 app.use('/api/auth', authRoutes);
 
 export const getCollection = async (collectionName) => {

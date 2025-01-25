@@ -60,7 +60,7 @@ router.get('/recepti/:id', authMiddleware, async (req, res) => {
     const korisnici = await getCollection('korisnici');
     const korisnik = await korisnici.findOne({ _id: new ObjectId(korisnikId) });
 
-    const isFavorite = korisnik?.omiljeniRecepti?.includes(receptId);
+    const isFavorite = korisnik?.omiljeniRecepti?.some((id) => id.equals(receptId));
 
     res.status(200).json({ ...recept, isFavorite });
   } catch (error) {
@@ -68,7 +68,6 @@ router.get('/recepti/:id', authMiddleware, async (req, res) => {
     res.status(500).json({ message: 'Došlo je do greške na serveru.' });
   }
 });
-
 
 // Dodavanje novog recepta
 router.post('/recepti', authMiddleware, async (req, res) => {
@@ -188,27 +187,28 @@ router.put('/recepti/:id', authMiddleware, async (req, res) => {
 router.post('/korisnici/omiljeni', authMiddleware, async (req, res) => {
   const { receptId } = req.body;
 
-  if (!mongodb.ObjectId.isValid(receptId)) {
+  if (!ObjectId.isValid(receptId)) {
     return res.status(400).json({ message: 'Neispravan ID recepta' });
   }
 
   try {
     const userId = req.user.id;
-    const db = await connectToStore();
-    const korisnici = db.collection('korisnici');
+    const korisnici = await getCollection('korisnici');
 
-    const user = await korisnici.findOne({ _id: new mongodb.ObjectId(userId) });
+    const user = await korisnici.findOne({ _id: new ObjectId(userId) });
     if (!user) {
       return res.status(404).json({ message: 'Korisnik nije pronađen.' });
     }
 
-    if (user.omiljeniRecepti.includes(receptId)) {
+    const receptObjectId = new ObjectId(receptId);
+
+    if (user.omiljeniRecepti?.some((id) => id.equals(receptObjectId))) {
       return res.status(400).json({ message: 'Recept je već u omiljenima.' });
     }
 
     await korisnici.updateOne(
-      { _id: new mongodb.ObjectId(userId) },
-      { $push: { omiljeniRecepti: receptId } }
+      { _id: new ObjectId(userId) },
+      { $push: { omiljeniRecepti: receptObjectId } }
     );
 
     res.status(200).json({ message: 'Recept je dodan u omiljene.' });
@@ -220,29 +220,30 @@ router.post('/korisnici/omiljeni', authMiddleware, async (req, res) => {
 
 // Uklanjanje recepta iz omiljenih
 router.delete('/korisnici/omiljeni', authMiddleware, async (req, res) => {
-  const { receptId } = req.body;
+  const { receptId } = req.query; // Dohvaćanje receptId iz query parametara
 
-  if (!mongodb.ObjectId.isValid(receptId)) {
+  if (!ObjectId.isValid(receptId)) {
     return res.status(400).json({ message: 'Neispravan ID recepta' });
   }
 
   try {
     const userId = req.user.id;
-    const db = await connectToStore();
-    const korisnici = db.collection('korisnici');
+    const korisnici = await getCollection('korisnici');
 
-    const user = await korisnici.findOne({ _id: new mongodb.ObjectId(userId) });
+    const user = await korisnici.findOne({ _id: new ObjectId(userId) });
     if (!user) {
       return res.status(404).json({ message: 'Korisnik nije pronađen.' });
     }
 
-    if (!user.omiljeniRecepti.includes(receptId)) {
+    const receptObjectId = new ObjectId(receptId);
+
+    if (!user.omiljeniRecepti?.some((id) => id.equals(receptObjectId))) {
       return res.status(400).json({ message: 'Recept nije u omiljenima.' });
     }
 
     await korisnici.updateOne(
-      { _id: new mongodb.ObjectId(userId) },
-      { $pull: { omiljeniRecepti: receptId } }
+      { _id: new ObjectId(userId) },
+      { $pull: { omiljeniRecepti: receptObjectId } }
     );
 
     res.status(200).json({ message: 'Recept je uklonjen iz omiljenih.' });
@@ -251,7 +252,6 @@ router.delete('/korisnici/omiljeni', authMiddleware, async (req, res) => {
     res.status(500).json({ message: 'Došlo je do greške na serveru.' });
   }
 });
-
 
 // Dohvaćanje omiljenih
 router.get('/omiljenirecepti', authMiddleware, async (req, res) => {
