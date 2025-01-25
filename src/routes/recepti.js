@@ -17,7 +17,7 @@ router.get('/recepti', async (req, res) => {
   }
 });
 
-// Pretraživanje recepata - mora biti definirano prije "/recepti/:id"
+// Pretraživanje recepata
 router.get('/recepti/pretraga', async (req, res) => {
   try {
     const { naziv } = req.query;
@@ -56,7 +56,6 @@ router.get('/recepti/:id', authMiddleware, async (req, res) => {
       return res.status(404).json({ message: 'Recept nije pronađen.' });
     }
 
-    // Provjeri je li recept u omiljenima korisnika
     const korisnici = await getCollection('korisnici');
     const korisnik = await korisnici.findOne({ _id: new ObjectId(korisnikId) });
 
@@ -78,7 +77,7 @@ router.post('/recepti', authMiddleware, async (req, res) => {
       return res.status(400).json({ message: 'Molimo popunite sva potrebna polja.' });
     }
 
-    const korisnikId = req.user.id; // Dohvaćanje korisničkog ID-a iz tokena
+    const korisnikId = req.user.id; 
 
     const noviRecept = {
       naziv,
@@ -88,7 +87,7 @@ router.post('/recepti', authMiddleware, async (req, res) => {
       porcije: porcije || 1,
       svidanja: 0,
       komentari: [],
-      korisnikId: new ObjectId(korisnikId), // Referenca na korisnika
+      korisnikId: new ObjectId(korisnikId), 
     };
 
     const collection = await getCollection('recepti');
@@ -103,8 +102,7 @@ router.post('/recepti', authMiddleware, async (req, res) => {
 // Dohvaćanje svojih recepata
 router.get('/mojirecepti', authMiddleware, async (req, res) => {
   try {
-    const userId = req.user.id; // Dohvat ID korisnika iz tokena
-    // Provjerite je li ID validan
+    const userId = req.user.id; 
     if (!ObjectId.isValid(userId)) {
       return res.status(400).json({ message: "Neispravan korisnički ID." });
     }
@@ -145,6 +143,7 @@ router.delete('/brisanjerecepta/:id', authMiddleware, async (req, res) => {
   await db.deleteOne({ _id: new ObjectId(receptId) });
   res.status(200).json({ message: 'Recept uspješno obrisan' });
 });
+
 // Ažuriranje recepta
 router.put('/recepti/:id', authMiddleware, async (req, res) => {
   const receptId = req.params.id;
@@ -220,7 +219,7 @@ router.post('/korisnici/omiljeni', authMiddleware, async (req, res) => {
 
 // Uklanjanje recepta iz omiljenih
 router.delete('/korisnici/omiljeni', authMiddleware, async (req, res) => {
-  const { receptId } = req.query; // Dohvaćanje receptId iz query parametara
+  const { receptId } = req.query; 
 
   if (!ObjectId.isValid(receptId)) {
     return res.status(400).json({ message: 'Neispravan ID recepta' });
@@ -260,7 +259,7 @@ router.get('/omiljenirecepti', authMiddleware, async (req, res) => {
     const korisnik = await korisnici.findOne({ _id: new ObjectId(req.user.id) });
 
     if (!korisnik || !korisnik.omiljeniRecepti) {
-      return res.status(200).json([]); // Ako nema omiljenih recepata, vraća prazan niz
+      return res.status(200).json([]); 
     }
 
     const recepti = await getCollection('recepti');
@@ -274,5 +273,96 @@ router.get('/omiljenirecepti', authMiddleware, async (req, res) => {
     res.status(500).json({ message: 'Došlo je do greške na serveru.' });
   }
 });
+
+// Dodavanje lajka recepta
+router.post('/korisnici/lajk', authMiddleware, async (req, res) => {
+  const { receptId } = req.body;
+
+  if (!ObjectId.isValid(receptId)) {
+    return res.status(400).json({ message: 'Neispravan ID recepta.' });
+  }
+
+  try {
+    const korisnikId = req.user.id;
+    const korisnici = await getCollection('korisnici');
+
+    const korisnik = await korisnici.findOne({ _id: new ObjectId(korisnikId) });
+    if (!korisnik) {
+      return res.status(404).json({ message: 'Korisnik nije pronađen.' });
+    }
+
+    const receptObjectId = new ObjectId(receptId);
+
+    if (korisnik.lajkaniRecepti?.some((id) => id.equals(receptObjectId))) {
+      return res.status(200).json({ message: 'Recept je već lajkan.' });
+    }
+
+    await korisnici.updateOne(
+      { _id: new ObjectId(korisnikId) },
+      { $push: { lajkaniRecepti: receptObjectId } }
+    );
+
+    res.status(200).json({ message: 'Recept je lajkan.' });
+  } catch (error) {
+    console.error('Greška pri lajkanju recepta:', error);
+    res.status(500).json({ message: 'Došlo je do greške na serveru.' });
+  }
+});
+
+// Uklanjanje lajka recepta
+router.delete('/korisnici/lajk', authMiddleware, async (req, res) => {
+  const { receptId } = req.query; // Dohvaćanje receptId iz query parametara
+
+  if (!ObjectId.isValid(receptId)) {
+    return res.status(400).json({ message: 'Neispravan ID recepta.' });
+  }
+
+  try {
+    const userId = req.user.id;
+    const korisnici = await getCollection('korisnici');
+
+    const user = await korisnici.findOne({ _id: new ObjectId(userId) });
+    if (!user) {
+      return res.status(404).json({ message: 'Korisnik nije pronađen.' });
+    }
+
+    const receptObjectId = new ObjectId(receptId);
+
+    if (!user.lajkaniRecepti?.some((id) => id.equals(receptObjectId))) {
+      return res.status(400).json({ message: 'Recept nije lajkan.' });
+    }
+
+    await korisnici.updateOne(
+      { _id: new ObjectId(userId) },
+      { $pull: { lajkaniRecepti: receptObjectId } }
+    );
+
+    res.status(200).json({ message: 'Recept je uklonjen iz lajkanja.' });
+  } catch (error) {
+    console.error('Greška pri uklanjanju iz lajkanja:', error);
+    res.status(500).json({ message: 'Došlo je do greške na serveru.' });
+  }
+});
+// Dohvaćanje lajkanih recepata
+router.get('/korisnici/lajkani', authMiddleware, async (req, res) => {
+  try {
+    const korisnikId = req.user.id;
+
+    const korisnici = await getCollection('korisnici');
+    const korisnik = await korisnici.findOne({ _id: new ObjectId(korisnikId) });
+
+    if (!korisnik) {
+      return res.status(404).json({ message: 'Korisnik nije pronađen.' });
+    }
+
+    const lajkaniRecepti = korisnik.lajkaniRecepti || [];
+
+    res.status(200).json(lajkaniRecepti); 
+  } catch (error) {
+    console.error('Greška pri dohvaćanju lajkanih recepata:', error);
+    res.status(500).json({ message: 'Došlo je do greške na serveru.' });
+  }
+});
+
 
 export default router;
