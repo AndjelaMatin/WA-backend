@@ -17,7 +17,7 @@ router.get('/recepti', async (req, res) => {
   }
 });
 
-// Pretraživanje recepata - mora biti definirano prije "/recepti/:id"
+// Pretraživanje recepata
 router.get('/recepti/pretraga', async (req, res) => {
   try {
     const { naziv } = req.query;
@@ -40,21 +40,28 @@ router.get('/recepti/pretraga', async (req, res) => {
 });
 
 // Dohvaćanje pojedinačnog recepta
-router.get('/recepti/:id', async (req, res) => {
+router.get('/recepti/:id', authMiddleware, async (req, res) => {
   try {
     const receptId = req.params.id;
+    const korisnikId = req.user.id;
+
     if (!ObjectId.isValid(receptId)) {
       return res.status(400).json({ message: 'Neispravan ID recepta' });
     }
 
-    const collection = await getCollection('recepti');
-    const recept = await collection.findOne({ _id: new ObjectId(receptId) });
+    const recepti = await getCollection('recepti');
+    const recept = await recepti.findOne({ _id: new ObjectId(receptId) });
 
     if (!recept) {
-      return res.status(404).json({ message: 'Recept nije pronađen' });
+      return res.status(404).json({ message: 'Recept nije pronađen.' });
     }
 
-    res.json(recept);
+    const korisnici = await getCollection('korisnici');
+    const korisnik = await korisnici.findOne({ _id: new ObjectId(korisnikId) });
+
+    const isFavorite = korisnik?.omiljeniRecepti?.some((id) => id.equals(receptId));
+
+    res.status(200).json({ ...recept, isFavorite });
   } catch (error) {
     console.error('Greška pri dohvaćanju recepta:', error);
     res.status(500).json({ message: 'Došlo je do greške na serveru.' });
@@ -70,7 +77,7 @@ router.post('/recepti', authMiddleware, async (req, res) => {
       return res.status(400).json({ message: 'Molimo popunite sva potrebna polja.' });
     }
 
-    const korisnikId = req.user.id; // Dohvaćanje korisničkog ID-a iz tokena
+    const korisnikId = req.user.id; 
 
     const noviRecept = {
       naziv,
@@ -80,7 +87,7 @@ router.post('/recepti', authMiddleware, async (req, res) => {
       porcije: porcije || 1,
       svidanja: 0,
       komentari: [],
-      korisnikId: new ObjectId(korisnikId), // Referenca na korisnika
+      korisnikId: new ObjectId(korisnikId), 
     };
 
     const collection = await getCollection('recepti');
@@ -93,10 +100,10 @@ router.post('/recepti', authMiddleware, async (req, res) => {
   }
 });
 
+// Dohvaćanje svojih recepata
 router.get('/mojirecepti', authMiddleware, async (req, res) => {
   try {
-    const userId = req.user.id; // Dohvat ID korisnika iz tokena
-    // Provjerite je li ID validan
+    const userId = req.user.id; 
     if (!ObjectId.isValid(userId)) {
       return res.status(400).json({ message: "Neispravan korisnički ID." });
     }
@@ -138,5 +145,345 @@ router.delete('/brisanjerecepta/:id', authMiddleware, async (req, res) => {
   res.status(200).json({ message: 'Recept uspješno obrisan' });
 });
 
+// Ažuriranje recepta
+router.put('/recepti/:id', authMiddleware, async (req, res) => {
+  const receptId = req.params.id;
+
+  if (!ObjectId.isValid(receptId)) {
+    return res.status(400).json({ message: 'Neispravan ID recepta' });
+  }
+
+  const azuriranja = req.body;
+
+  if (Object.keys(azuriranja).length === 0) {
+    return res.status(400).json({ message: 'Nema promjena za ažuriranje.' });
+  }
+
+  try {
+    const db = await getCollection('recepti');
+    const recept = await db.findOne({ _id: new ObjectId(receptId) });
+
+    if (!recept) {
+      return res.status(404).json({ message: 'Recept nije pronađen' });
+    }
+
+    if (recept.korisnikId.toString() !== req.user.id) {
+      return res.status(403).json({ message: 'Nemate dopuštenje za uređivanje ovog recepta' });
+    }
+
+    await db.updateOne(
+      { _id: new ObjectId(receptId) },
+      { $set: azuriranja }
+    );
+
+    res.status(200).json({ message: 'Recept uspješno ažuriran' });
+  } catch (error) {
+    console.error('Greška pri ažuriranju recepta:', error);
+    res.status(500).json({ message: 'Došlo je do greške na serveru.' });
+  }
+});
+
+// Dodavanje recepta u omiljene
+router.post('/korisnici/omiljeni', authMiddleware, async (req, res) => {
+  const { receptId } = req.body;
+
+  if (!ObjectId.isValid(receptId)) {
+    return res.status(400).json({ message: 'Neispravan ID recepta' });
+  }
+
+  try {
+    const userId = req.user.id;
+    const korisnici = await getCollection('korisnici');
+
+    const user = await korisnici.findOne({ _id: new ObjectId(userId) });
+    if (!user) {
+      return res.status(404).json({ message: 'Korisnik nije pronađen.' });
+    }
+
+    const receptObjectId = new ObjectId(receptId);
+
+    if (user.omiljeniRecepti?.some((id) => id.equals(receptObjectId))) {
+      return res.status(400).json({ message: 'Recept je već u omiljenima.' });
+    }
+
+    await korisnici.updateOne(
+      { _id: new ObjectId(userId) },
+      { $push: { omiljeniRecepti: receptObjectId } }
+    );
+
+    res.status(200).json({ message: 'Recept je dodan u omiljene.' });
+  } catch (error) {
+    console.error('Greška pri dodavanju u omiljene:', error);
+    res.status(500).json({ message: 'Došlo je do greške na serveru.' });
+  }
+});
+
+// Uklanjanje recepta iz omiljenih
+router.delete('/korisnici/omiljeni', authMiddleware, async (req, res) => {
+  const { receptId } = req.query; 
+
+  if (!ObjectId.isValid(receptId)) {
+    return res.status(400).json({ message: 'Neispravan ID recepta' });
+  }
+
+  try {
+    const userId = req.user.id;
+    const korisnici = await getCollection('korisnici');
+
+    const user = await korisnici.findOne({ _id: new ObjectId(userId) });
+    if (!user) {
+      return res.status(404).json({ message: 'Korisnik nije pronađen.' });
+    }
+
+    const receptObjectId = new ObjectId(receptId);
+
+    if (!user.omiljeniRecepti?.some((id) => id.equals(receptObjectId))) {
+      return res.status(400).json({ message: 'Recept nije u omiljenima.' });
+    }
+
+    await korisnici.updateOne(
+      { _id: new ObjectId(userId) },
+      { $pull: { omiljeniRecepti: receptObjectId } }
+    );
+
+    res.status(200).json({ message: 'Recept je uklonjen iz omiljenih.' });
+  } catch (error) {
+    console.error('Greška pri uklanjanju iz omiljenih:', error);
+    res.status(500).json({ message: 'Došlo je do greške na serveru.' });
+  }
+});
+
+// Dohvaćanje omiljenih
+router.get('/omiljenirecepti', authMiddleware, async (req, res) => {
+  try {
+    const korisnici = await getCollection('korisnici');
+    const korisnik = await korisnici.findOne({ _id: new ObjectId(req.user.id) });
+
+    if (!korisnik || !korisnik.omiljeniRecepti) {
+      return res.status(200).json([]); 
+    }
+
+    const recepti = await getCollection('recepti');
+    const favoriteRecipes = await recepti
+      .find({ _id: { $in: korisnik.omiljeniRecepti.map((id) => new ObjectId(id)) } })
+      .toArray();
+
+    res.status(200).json(favoriteRecipes);
+  } catch (error) {
+    console.error('Greška pri dohvaćanju omiljenih recepata:', error);
+    res.status(500).json({ message: 'Došlo je do greške na serveru.' });
+  }
+});
+
+// Dodavanje lajka recepta
+router.post('/korisnici/lajk', authMiddleware, async (req, res) => {
+  const { receptId } = req.body;
+
+  if (!ObjectId.isValid(receptId)) {
+    return res.status(400).json({ message: 'Neispravan ID recepta.' });
+  }
+
+  try {
+    const korisnikId = req.user.id;
+    const korisnici = await getCollection('korisnici');
+
+    const korisnik = await korisnici.findOne({ _id: new ObjectId(korisnikId) });
+    if (!korisnik) {
+      return res.status(404).json({ message: 'Korisnik nije pronađen.' });
+    }
+
+    const receptObjectId = new ObjectId(receptId);
+
+    if (korisnik.lajkaniRecepti?.some((id) => id.equals(receptObjectId))) {
+      return res.status(200).json({ message: 'Recept je već lajkan.' });
+    }
+
+    await korisnici.updateOne(
+      { _id: new ObjectId(korisnikId) },
+      { $push: { lajkaniRecepti: receptObjectId } }
+    );
+
+    res.status(200).json({ message: 'Recept je lajkan.' });
+  } catch (error) {
+    console.error('Greška pri lajkanju recepta:', error);
+    res.status(500).json({ message: 'Došlo je do greške na serveru.' });
+  }
+});
+
+// Uklanjanje lajka recepta
+router.delete('/korisnici/lajk', authMiddleware, async (req, res) => {
+  const { receptId } = req.query; 
+
+  if (!ObjectId.isValid(receptId)) {
+    return res.status(400).json({ message: 'Neispravan ID recepta.' });
+  }
+
+  try {
+    const userId = req.user.id;
+    const korisnici = await getCollection('korisnici');
+
+    const user = await korisnici.findOne({ _id: new ObjectId(userId) });
+    if (!user) {
+      return res.status(404).json({ message: 'Korisnik nije pronađen.' });
+    }
+
+    const receptObjectId = new ObjectId(receptId);
+
+    if (!user.lajkaniRecepti?.some((id) => id.equals(receptObjectId))) {
+      return res.status(400).json({ message: 'Recept nije lajkan.' });
+    }
+
+    await korisnici.updateOne(
+      { _id: new ObjectId(userId) },
+      { $pull: { lajkaniRecepti: receptObjectId } }
+    );
+
+    res.status(200).json({ message: 'Recept je uklonjen iz lajkanja.' });
+  } catch (error) {
+    console.error('Greška pri uklanjanju iz lajkanja:', error);
+    res.status(500).json({ message: 'Došlo je do greške na serveru.' });
+  }
+});
+
+// Dohvaćanje lajkanih recepata
+router.get('/korisnici/lajkani', authMiddleware, async (req, res) => {
+  try {
+    const korisnikId = req.user.id;
+
+    const korisnici = await getCollection('korisnici');
+    const korisnik = await korisnici.findOne({ _id: new ObjectId(korisnikId) });
+
+    if (!korisnik) {
+      return res.status(404).json({ message: 'Korisnik nije pronađen.' });
+    }
+
+    const lajkaniRecepti = korisnik.lajkaniRecepti || [];
+
+    res.status(200).json(lajkaniRecepti); 
+  } catch (error) {
+    console.error('Greška pri dohvaćanju lajkanih recepata:', error);
+    res.status(500).json({ message: 'Došlo je do greške na serveru.' });
+  }
+});
+
+// Dohvaćanje komentiranih recepata
+router.get('/korisnici/komentirani', authMiddleware, async (req, res) => {
+  try {
+    const korisnikId = req.user.id;
+    const recepti = await getCollection('recepti');
+
+    // Pronađi recepte gdje je korisnik komentirao
+    const komentiraniRecepti = await recepti
+      .find({ "komentari.korisnik": new ObjectId(korisnikId) })
+      .project({ _id: 1 }) // Vraća samo ID-ove recepata
+      .toArray();
+
+    res.status(200).json(komentiraniRecepti.map((r) => r._id));
+  } catch (error) {
+    console.error("Greška pri dohvaćanju komentiranih recepata:", error);
+    res.status(500).json({ message: "Došlo je do greške na serveru." });
+  }
+});
+
+
+//Dodavanje komentara na recept
+router.post('/recepti/:id/komentari', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const korisnikId = req.user.id; // Dohvati korisnikov ID iz tokena
+    const { tekst } = req.body;
+
+    // Dohvati ime korisnika iz kolekcije 'korisnici'
+    const korisnici = await getCollection('korisnici');
+    const korisnik = await korisnici.findOne({ _id: new ObjectId(korisnikId) });
+
+    if (!korisnik) {
+      return res.status(404).json({ message: 'Korisnik nije pronađen.' });
+    }
+
+    // Priprema objekta komentara
+    const komentari = {
+      _id: new ObjectId(), // Jedinstveni ID za komentar
+      tekst,
+      korisnik: new ObjectId(korisnikId), // Korisnikov ID spremiti kao ObjectId
+      korisnikIme: korisnik.name, // Dodaj ime korisnika
+      datum: new Date(), // Dodaj trenutni datum
+    };
+
+    const recepti = await getCollection('recepti');
+    const result = await recepti.updateOne(
+      { _id: new ObjectId(id) }, // Recept ID mora biti ObjectId
+      { $push: { komentari } } // Dodaj komentar u polje 'komentari'
+    );
+
+    if (result.modifiedCount === 0) {
+      return res.status(404).json({ message: 'Recept nije pronađen.' });
+    }
+
+    res.status(201).json(komentari); // Vrati dodani komentar kao odgovor
+  } catch (error) {
+    console.error('Greška pri dodavanju komentara:', error);
+    res.status(500).json({ message: 'Došlo je do greške na serveru.' });
+  }
+});
+//Brisanje komentara na recept
+router.delete('/recepti/:id/komentari/:komentarId', authMiddleware, async (req, res) => {
+  try {
+    const { id, komentarId } = req.params;
+    const korisnikId = req.user.id;
+
+    if (!ObjectId.isValid(id) || !ObjectId.isValid(komentarId)) {
+      return res.status(400).json({ message: 'Neispravan ID recepta ili komentara.' });
+    }
+
+    const recepti = await getCollection('recepti');
+    const result = await recepti.updateOne(
+      {
+        _id: new ObjectId(id),
+        "komentari._id": new ObjectId(komentarId), // Provjera ID-a komentara
+        "komentari.korisnik": new ObjectId(korisnikId), // Provjera korisnika
+      },
+      {
+        $pull: { komentari: { _id: new ObjectId(komentarId) } }, // Uklanjanje komentara
+      }
+    );
+    
+    if (result.modifiedCount === 0) {
+      return res.status(404).json({ message: 'Komentar nije pronađen ili nemate dozvolu za brisanje.' });
+    }
+
+    res.status(200).json({ message: 'Komentar obrisan.' });
+  } catch (error) {
+    console.error('Greška pri brisanju komentara:', error);
+    res.status(500).json({ message: 'Došlo je do greške na serveru.' });
+  }
+});
+
+
+//Dohvaćanje komentara za određeni recept
+router.get('/recepti/:id/komentari', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Neispravan ID recepta.' });
+    }
+
+    const recepti = await getCollection('recepti');
+    const recept = await recepti.findOne(
+      { _id: new ObjectId(id) },
+      { projection: { komentari: 1, _id: 0 } } // Dohvaća samo komentare
+    );
+
+    if (!recept || !recept.komentari) {
+      return res.status(404).json({ message: 'Recept nije pronađen ili nema komentara.' });
+    }
+
+    res.status(200).json(recept.komentari); // Direktno šalje komentare
+  } catch (error) {
+    console.error('Greška pri dohvaćanju komentara:', error);
+    res.status(500).json({ message: 'Došlo je do greške na serveru.' });
+  }
+});
 
 export default router;

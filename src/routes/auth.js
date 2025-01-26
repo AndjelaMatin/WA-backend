@@ -1,7 +1,7 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
-import { connectToStore } from '../store/store.js';
+import { getCollection } from '../store/store.js';
 import authMiddleware from '../middleware/auth.js';
 import mongodb from 'mongodb';
 
@@ -11,8 +11,7 @@ router.post('/signup', async (req, res) => {
   const { name, email, password } = req.body;
 
   try {
-    const db = await connectToStore();
-    const collection = db.collection('korisnici');
+    const collection = await getCollection('korisnici');
 
     const existingUser = await collection.findOne({ email });
     if (existingUser) {
@@ -38,8 +37,7 @@ router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    const db = await connectToStore();
-    const collection = db.collection('korisnici');
+    const collection = await getCollection('korisnici');
 
     const user = await collection.findOne({ email });
     if (!user) {
@@ -61,8 +59,7 @@ router.post('/login', async (req, res) => {
 router.get('/korisnici', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
-    const db = await connectToStore();
-    const collection = db.collection('korisnici');
+    const collection = await getCollection('korisnici');
 
     const user = await collection.findOne({ _id: new mongodb.ObjectId(userId) });
     if (!user) {
@@ -79,8 +76,7 @@ router.put('/korisnici', authMiddleware, async (req, res) => {
 
   try {
     const userId = req.user.id;
-    const db = await connectToStore();
-    const collection = db.collection('korisnici');
+    const collection = await getCollection('korisnici');
 
     const user = await collection.findOne({ _id: new mongodb.ObjectId(userId) });
     if (!user) {

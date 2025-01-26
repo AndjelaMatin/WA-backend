@@ -1,162 +1,149 @@
-import express from "express";
-import { getCollection } from "../store/store.js";
-import { ObjectId } from "mongodb";
+import express from 'express';
+import { getCollection } from '../store/store.js';
+import authMiddleware from '../middleware/auth.js';
+import mongodb from 'mongodb';
+
 const router = express.Router();
 
-// ID shopping liste - koristimo statični ID za sada
-const SHOPPING_LIST_ID = "64bfc72f9a2cdd0012345678"; // Zamijeni s odgovarajućim ID-om
-router.put("/", async (req, res) => {
-    try {
-      const { items } = req.body;
-  
-      const collection = await getCollection("shoppingLista");
-      await collection.updateOne(
-        { _id: new ObjectId(SHOPPING_LIST_ID) },
-        { $set: { items } }
-      );
-  
-      res.status(200).json({ message: "Lista ažurirana." });
-    } catch (error) {
-      console.error("Greška pri ažuriranju liste:", error);
-      res.status(500).json({ message: "Greška na serveru." });
-    }
-  });
-  router.put("/:index", async (req, res) => {
-    try {
-      const { index } = req.params;
-      const { name, completed } = req.body; // Dohvati podatke iz zahtjeva
-  
-      const collection = await getCollection("shoppingLista");
-      const list = await collection.findOne({ _id: new ObjectId(SHOPPING_LIST_ID) });
-  
-      if (!list || !list.items[index]) {
-        return res.status(404).json({ message: "Stavka nije pronađena." });
-      }
-  
-      // Ažuriraj status i/ili ime stavke
-      list.items[index] = { ...list.items[index], name, completed };
-  
-      // Spremi promjene u bazi
-      await collection.updateOne(
-        { _id: new ObjectId(SHOPPING_LIST_ID) },
-        { $set: { items: list.items } }
-      );
-  
-      res.status(200).json({ message: "Stavka ažurirana." });
-    } catch (error) {
-      console.error("Greška pri ažuriranju stavke:", error);
-      res.status(500).json({ message: "Greška na serveru." });
-    }
-  });
-  
-// Dohvati sve stavke iz shopping liste
-router.get("/", async (req, res) => {
+// Dohvati shopping listu za prijavljenog korisnika
+router.get('/', authMiddleware, async (req, res) => {
   try {
-    const collection = await getCollection("shoppingLista");
-    const list = await collection.findOne({ _id: new ObjectId(SHOPPING_LIST_ID) });
+    const userId = req.user.id;
+    const collection = await getCollection('shoppingLista');
 
-    if (!list) {
-      return res.status(404).json({ message: "Lista nije pronađena." });
+    // Pronađi shopping listu korisnika
+    const shoppingList = await collection.findOne({ userId: new mongodb.ObjectId(userId) });
+
+    // Ako lista ne postoji, vrati praznu
+    if (!shoppingList) {
+      return res.status(200).json({ items: [] });
     }
 
-    res.status(200).json(list.items || []);
+    res.status(200).json(shoppingList.items);
   } catch (error) {
-    console.error("Greška pri dohvaćanju liste:", error);
-    res.status(500).json({ message: "Greška na serveru." });
+    res.status(500).json({ message: 'Greška pri dohvaćanju shopping liste', error });
   }
 });
 
 // Dodaj novu stavku u shopping listu
-router.post("/", async (req, res) => {
-  try {
-    const { name, completed } = req.body;
+router.post('/', authMiddleware, async (req, res) => {
+  const { name, completed = false } = req.body;
 
-    if (!name) {
-      return res.status(400).json({ message: "Ime stavke je obavezno." });
+  try {
+    const userId = req.user.id;
+    const collection = await getCollection('shoppingLista');
+
+    // Pronađi ili kreiraj shopping listu korisnika
+    let shoppingList = await collection.findOne({ userId: new mongodb.ObjectId(userId) });
+    if (!shoppingList) {
+      shoppingList = {
+        userId: new mongodb.ObjectId(userId),
+        items: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      await collection.insertOne(shoppingList);
     }
 
-    const collection = await getCollection("shoppingLista");
-    const result = await collection.updateOne(
-      { _id: new ObjectId(SHOPPING_LIST_ID) },
-      { $push: { items: { name, completed: completed || false } } },
-      { upsert: true } // Ako lista ne postoji, kreiraj je
+    // Dodaj novu stavku
+    const newItem = { id: new mongodb.ObjectId(), name, completed };
+    shoppingList.items.push(newItem);
+
+    // Ažuriraj shopping listu u bazi
+    await collection.updateOne(
+      { userId: new mongodb.ObjectId(userId) },
+      { $set: { items: shoppingList.items, updatedAt: new Date() } }
     );
 
-    res.status(201).json({ name, completed: completed || false });
+    res.status(201).json({ message: 'Stavka dodana', item: newItem });
   } catch (error) {
-    console.error("Greška pri dodavanju stavke:", error);
-    res.status(500).json({ message: "Greška na serveru." });
+    res.status(500).json({ message: 'Greška pri dodavanju stavke', error });
   }
 });
 
-// Ažuriraj stavku po indeksu
-router.put("/:index", async (req, res) => {
-    try {
-      const { index } = req.params;
-      const { name, completed } = req.body;
-  
-      const collection = await getCollection("shoppingLista");
-      const list = await collection.findOne({ _id: new ObjectId(SHOPPING_LIST_ID) });
-  
-      if (!list || !list.items[index]) {
-        return res.status(404).json({ message: "Stavka nije pronađena." });
-      }
-  
-      list.items[index] = { ...list.items[index], name, completed };
-  
-      await collection.updateOne(
-        { _id: new ObjectId(SHOPPING_LIST_ID) },
-        { $set: { items: list.items } }
-      );
-  
-      res.status(200).json({ message: "Stavka ažurirana." });
-    } catch (error) {
-      console.error("Greška pri ažuriranju stavke:", error);
-      res.status(500).json({ message: "Greška na serveru." });
-    }
-  });
-  
-// Obriši stavku po indeksu
-router.delete("/:index", async (req, res) => {
-    try {
-      const { index } = req.params;
-  
-      const collection = await getCollection("shoppingLista");
-      const list = await collection.findOne({ _id: new ObjectId(SHOPPING_LIST_ID) });
-  
-      if (!list || !list.items[index]) {
-        return res.status(404).json({ message: "Stavka nije pronađena." });
-      }
-  
-      // Ukloni stavku iz polja `items`
-      list.items.splice(index, 1);
-  
-      // Ažuriraj dokument u bazi
-      await collection.updateOne(
-        { _id: new ObjectId(SHOPPING_LIST_ID) },
-        { $set: { items: list.items } }
-      );
-  
-      res.status(200).json({ message: "Stavka uspješno obrisana." });
-    } catch (error) {
-      console.error("Greška pri brisanju stavke:", error);
-      res.status(500).json({ message: "Greška na serveru." });
-    }
-  });  
+// Ažuriraj stavku u shopping listi
+router.put('/:id', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const { completed } = req.body;
 
-// Obriši sve stavke
-router.delete("/", async (req, res) => {
   try {
-    const collection = await getCollection("shoppingLista");
+    const userId = req.user.id;
+    const collection = await getCollection('shoppingLista');
+
+    const shoppingList = await collection.findOne({ userId: new mongodb.ObjectId(userId) });
+    if (!shoppingList) {
+      return res.status(404).json({ message: 'Shopping lista nije pronađena' });
+    }
+
+    const itemIndex = shoppingList.items.findIndex((item) => item.id.toString() === id);
+    if (itemIndex === -1) {
+      return res.status(404).json({ message: 'Stavka nije pronađena' });
+    }
+
+    shoppingList.items[itemIndex].completed = completed;
+
     await collection.updateOne(
-      { _id: new ObjectId(SHOPPING_LIST_ID) },
-      { $set: { items: [] } }
+      { userId: new mongodb.ObjectId(userId) },
+      { $set: { items: shoppingList.items, updatedAt: new Date() } }
     );
 
-    res.status(200).json({ message: "Sve stavke obrisane." });
+    res.status(200).json({ message: 'Stavka ažurirana' });
   } catch (error) {
-    console.error("Greška pri brisanju svih stavki:", error);
-    res.status(500).json({ message: "Greška na serveru." });
+    res.status(500).json({ message: 'Greška pri ažuriranju stavke', error });
+  }
+});
+
+// Obriši označene stavke iz shopping liste
+router.delete('/completed', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const collection = await getCollection('shoppingLista');
+
+    // Pronađi shopping listu korisnika
+    const shoppingList = await collection.findOne({ userId: new mongodb.ObjectId(userId) });
+    if (!shoppingList) {
+      return res.status(404).json({ message: 'Shopping lista nije pronađena' });
+    }
+
+    // Filtriraj stavke koje nisu označene
+    shoppingList.items = shoppingList.items.filter((item) => !item.completed);
+
+    // Spremi promjene u bazi
+    await collection.updateOne(
+      { userId: new mongodb.ObjectId(userId) },
+      { $set: { items: shoppingList.items, updatedAt: new Date() } }
+    );
+
+    res.status(200).json({ message: 'Označene stavke obrisane' });
+  } catch (error) {
+    res.status(500).json({ message: 'Greška pri brisanju označenih stavki', error });
+  }
+});
+
+
+// Obriši pojedinačnu stavku
+router.delete('/:id', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const userId = req.user.id;
+    const collection = await getCollection('shoppingLista');
+
+    const shoppingList = await collection.findOne({ userId: new mongodb.ObjectId(userId) });
+    if (!shoppingList) {
+      return res.status(404).json({ message: 'Shopping lista nije pronađena' });
+    }
+
+    shoppingList.items = shoppingList.items.filter((item) => item.id.toString() !== id);
+
+    await collection.updateOne(
+      { userId: new mongodb.ObjectId(userId) },
+      { $set: { items: shoppingList.items, updatedAt: new Date() } }
+    );
+
+    res.status(200).json({ message: 'Stavka obrisana' });
+  } catch (error) {
+    res.status(500).json({ message: 'Greška pri brisanju stavke', error });
   }
 });
 
