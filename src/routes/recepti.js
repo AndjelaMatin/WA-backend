@@ -99,6 +99,7 @@ router.post('/recepti', authMiddleware, async (req, res) => {
     res.status(500).json({ message: 'Došlo je do greške na serveru' });
   }
 });
+
 // Dohvaćanje svojih recepata
 router.get('/mojirecepti', authMiddleware, async (req, res) => {
   try {
@@ -311,7 +312,7 @@ router.post('/korisnici/lajk', authMiddleware, async (req, res) => {
 
 // Uklanjanje lajka recepta
 router.delete('/korisnici/lajk', authMiddleware, async (req, res) => {
-  const { receptId } = req.query; // Dohvaćanje receptId iz query parametara
+  const { receptId } = req.query; 
 
   if (!ObjectId.isValid(receptId)) {
     return res.status(400).json({ message: 'Neispravan ID recepta.' });
@@ -343,6 +344,7 @@ router.delete('/korisnici/lajk', authMiddleware, async (req, res) => {
     res.status(500).json({ message: 'Došlo je do greške na serveru.' });
   }
 });
+
 // Dohvaćanje lajkanih recepata
 router.get('/korisnici/lajkani', authMiddleware, async (req, res) => {
   try {
@@ -363,16 +365,17 @@ router.get('/korisnici/lajkani', authMiddleware, async (req, res) => {
     res.status(500).json({ message: 'Došlo je do greške na serveru.' });
   }
 });
+
 // Dohvaćanje komentiranih recepata
 router.get('/korisnici/komentirani', authMiddleware, async (req, res) => {
   try {
     const korisnikId = req.user.id;
     const recepti = await getCollection('recepti');
 
-    // Pronađi recepte koje je komentirao korisnik
+    // Pronađi recepte gdje je korisnik komentirao
     const komentiraniRecepti = await recepti
       .find({ "komentari.korisnik": new ObjectId(korisnikId) })
-      .project({ _id: 1 }) // Vraća samo ID recepata
+      .project({ _id: 1 }) // Vraća samo ID-ove recepata
       .toArray();
 
     res.status(200).json(komentiraniRecepti.map((r) => r._id));
@@ -382,53 +385,69 @@ router.get('/korisnici/komentirani', authMiddleware, async (req, res) => {
   }
 });
 
+
 //Dodavanje komentara na recept
-  router.post('/recepti/:id/komentari', authMiddleware, async (req, res) => {
-    try {
+router.post('/recepti/:id/komentari', authMiddleware, async (req, res) => {
+  try {
     const { id } = req.params;
+    const korisnikId = req.user.id; // Dohvati korisnikov ID iz tokena
     const { tekst } = req.body;
 
-    if (!tekst || tekst.trim() === '') {
-      return res.status(400).json({ message: 'Tekst komentara je obavezan.' });
+    // Dohvati ime korisnika iz kolekcije 'korisnici'
+    const korisnici = await getCollection('korisnici');
+    const korisnik = await korisnici.findOne({ _id: new ObjectId(korisnikId) });
+
+    if (!korisnik) {
+      return res.status(404).json({ message: 'Korisnik nije pronađen.' });
     }
 
-    const korisnikId = req.user.id; // Preuzimanje korisničkog ID-a iz autentifikacije
+    // Priprema objekta komentara
     const komentari = {
-      korisnik: new ObjectId(korisnikId), // Konverzija korisničkog ID-a u ObjectId
+      _id: new ObjectId(), // Jedinstveni ID za komentar
       tekst,
-      datum: new Date(),
+      korisnik: new ObjectId(korisnikId), // Korisnikov ID spremiti kao ObjectId
+      korisnikIme: korisnik.name, // Dodaj ime korisnika
+      datum: new Date(), // Dodaj trenutni datum
     };
 
     const recepti = await getCollection('recepti');
     const result = await recepti.updateOne(
-      { _id: new ObjectId(id) },
-      { $push: { komentari } }
+      { _id: new ObjectId(id) }, // Recept ID mora biti ObjectId
+      { $push: { komentari } } // Dodaj komentar u polje 'komentari'
     );
 
     if (result.modifiedCount === 0) {
       return res.status(404).json({ message: 'Recept nije pronađen.' });
     }
 
-    res.status(200).json(komentari); // Vraćamo dodat komentar
+    res.status(201).json(komentari); // Vrati dodani komentar kao odgovor
   } catch (error) {
     console.error('Greška pri dodavanju komentara:', error);
     res.status(500).json({ message: 'Došlo je do greške na serveru.' });
   }
 });
-
-
 //Brisanje komentara na recept
 router.delete('/recepti/:id/komentari/:komentarId', authMiddleware, async (req, res) => {
   try {
     const { id, komentarId } = req.params;
     const korisnikId = req.user.id;
 
+    if (!ObjectId.isValid(id) || !ObjectId.isValid(komentarId)) {
+      return res.status(400).json({ message: 'Neispravan ID recepta ili komentara.' });
+    }
+
     const recepti = await getCollection('recepti');
     const result = await recepti.updateOne(
-      { _id: new ObjectId(id) },
-      { $pull: { komentari: { _id: new ObjectId(komentarId), korisnik: korisnikId } } }
+      {
+        _id: new ObjectId(id),
+        "komentari._id": new ObjectId(komentarId), // Provjera ID-a komentara
+        "komentari.korisnik": new ObjectId(korisnikId), // Provjera korisnika
+      },
+      {
+        $pull: { komentari: { _id: new ObjectId(komentarId) } }, // Uklanjanje komentara
+      }
     );
-
+    
     if (result.modifiedCount === 0) {
       return res.status(404).json({ message: 'Komentar nije pronađen ili nemate dozvolu za brisanje.' });
     }
@@ -440,8 +459,9 @@ router.delete('/recepti/:id/komentari/:komentarId', authMiddleware, async (req, 
   }
 });
 
+
 //Dohvaćanje komentara za određeni recept
-router.get('/recepti/:id/komentari', authMiddleware, async (req, res) => {
+router.get('/recepti/:id/komentari', async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -450,42 +470,20 @@ router.get('/recepti/:id/komentari', authMiddleware, async (req, res) => {
     }
 
     const recepti = await getCollection('recepti');
+    const recept = await recepti.findOne(
+      { _id: new ObjectId(id) },
+      { projection: { komentari: 1, _id: 0 } } // Dohvaća samo komentare
+    );
 
-    const recept = await recepti.aggregate([
-      { $match: { _id: new ObjectId(id) } },
-      { $unwind: '$komentari' },
-      {
-        $lookup: {
-          from: 'korisnici',
-          localField: 'komentari.korisnik',
-          foreignField: '_id',
-          as: 'korisnikInfo',
-        },
-      },
-      {
-        $project: {
-          _id: 0,
-          'komentari.tekst': 1,
-          'komentari.datum': 1,
-          'korisnikInfo.ime': 1,
-        },
-      },
-    ]).toArray();
-
-    if (!recept.length) {
+    if (!recept || !recept.komentari) {
       return res.status(404).json({ message: 'Recept nije pronađen ili nema komentara.' });
     }
 
-    const komentari = recept.map((k) => ({
-      tekst: k.komentari.tekst,
-      datum: k.komentari.datum,
-      korisnik: k.korisnikInfo[0]?.ime || 'Nepoznati korisnik',
-    }));
-
-    res.status(200).json(komentari);
+    res.status(200).json(recept.komentari); // Direktno šalje komentare
   } catch (error) {
-    console.error('Greška pri dohvatanju komentara:', error);
+    console.error('Greška pri dohvaćanju komentara:', error);
     res.status(500).json({ message: 'Došlo je do greške na serveru.' });
   }
 });
+
 export default router;
