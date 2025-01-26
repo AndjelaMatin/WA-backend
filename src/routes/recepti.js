@@ -363,6 +363,129 @@ router.get('/korisnici/lajkani', authMiddleware, async (req, res) => {
     res.status(500).json({ message: 'Došlo je do greške na serveru.' });
   }
 });
+// Dohvaćanje komentiranih recepata
+router.get('/korisnici/komentirani', authMiddleware, async (req, res) => {
+  try {
+    const korisnikId = req.user.id;
+    const recepti = await getCollection('recepti');
+
+    // Pronađi recepte koje je komentirao korisnik
+    const komentiraniRecepti = await recepti
+      .find({ "komentari.korisnik": new ObjectId(korisnikId) })
+      .project({ _id: 1 }) // Vraća samo ID recepata
+      .toArray();
+
+    res.status(200).json(komentiraniRecepti.map((r) => r._id));
+  } catch (error) {
+    console.error("Greška pri dohvaćanju komentiranih recepata:", error);
+    res.status(500).json({ message: "Došlo je do greške na serveru." });
+  }
+});
+
+//Dodavanje komentara na recept
+  router.post('/recepti/:id/komentari', authMiddleware, async (req, res) => {
+    try {
+    const { id } = req.params;
+    const { tekst } = req.body;
+
+    if (!tekst || tekst.trim() === '') {
+      return res.status(400).json({ message: 'Tekst komentara je obavezan.' });
+    }
+
+    const korisnikId = req.user.id; // Preuzimanje korisničkog ID-a iz autentifikacije
+    const komentari = {
+      korisnik: new ObjectId(korisnikId), // Konverzija korisničkog ID-a u ObjectId
+      tekst,
+      datum: new Date(),
+    };
+
+    const recepti = await getCollection('recepti');
+    const result = await recepti.updateOne(
+      { _id: new ObjectId(id) },
+      { $push: { komentari } }
+    );
+
+    if (result.modifiedCount === 0) {
+      return res.status(404).json({ message: 'Recept nije pronađen.' });
+    }
+
+    res.status(200).json(komentari); // Vraćamo dodat komentar
+  } catch (error) {
+    console.error('Greška pri dodavanju komentara:', error);
+    res.status(500).json({ message: 'Došlo je do greške na serveru.' });
+  }
+});
 
 
+//Brisanje komentara na recept
+router.delete('/recepti/:id/komentari/:komentarId', authMiddleware, async (req, res) => {
+  try {
+    const { id, komentarId } = req.params;
+    const korisnikId = req.user.id;
+
+    const recepti = await getCollection('recepti');
+    const result = await recepti.updateOne(
+      { _id: new ObjectId(id) },
+      { $pull: { komentari: { _id: new ObjectId(komentarId), korisnik: korisnikId } } }
+    );
+
+    if (result.modifiedCount === 0) {
+      return res.status(404).json({ message: 'Komentar nije pronađen ili nemate dozvolu za brisanje.' });
+    }
+
+    res.status(200).json({ message: 'Komentar obrisan.' });
+  } catch (error) {
+    console.error('Greška pri brisanju komentara:', error);
+    res.status(500).json({ message: 'Došlo je do greške na serveru.' });
+  }
+});
+
+//Dohvaćanje komentara za određeni recept
+router.get('/recepti/:id/komentari', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Neispravan ID recepta.' });
+    }
+
+    const recepti = await getCollection('recepti');
+
+    const recept = await recepti.aggregate([
+      { $match: { _id: new ObjectId(id) } },
+      { $unwind: '$komentari' },
+      {
+        $lookup: {
+          from: 'korisnici',
+          localField: 'komentari.korisnik',
+          foreignField: '_id',
+          as: 'korisnikInfo',
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          'komentari.tekst': 1,
+          'komentari.datum': 1,
+          'korisnikInfo.ime': 1,
+        },
+      },
+    ]).toArray();
+
+    if (!recept.length) {
+      return res.status(404).json({ message: 'Recept nije pronađen ili nema komentara.' });
+    }
+
+    const komentari = recept.map((k) => ({
+      tekst: k.komentari.tekst,
+      datum: k.komentari.datum,
+      korisnik: k.korisnikInfo[0]?.ime || 'Nepoznati korisnik',
+    }));
+
+    res.status(200).json(komentari);
+  } catch (error) {
+    console.error('Greška pri dohvatanju komentara:', error);
+    res.status(500).json({ message: 'Došlo je do greške na serveru.' });
+  }
+});
 export default router;
