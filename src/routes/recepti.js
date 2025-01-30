@@ -372,10 +372,9 @@ router.get('/korisnici/komentirani', authMiddleware, async (req, res) => {
     const korisnikId = req.user.id;
     const recepti = await getCollection('recepti');
 
-    // Pronađi recepte gdje je korisnik komentirao
     const komentiraniRecepti = await recepti
       .find({ "komentari.korisnik": new ObjectId(korisnikId) })
-      .project({ _id: 1 }) // Vraća samo ID-ove recepata
+      .project({ _id: 1 }) 
       .toArray();
 
     res.status(200).json(komentiraniRecepti.map((r) => r._id));
@@ -385,15 +384,13 @@ router.get('/korisnici/komentirani', authMiddleware, async (req, res) => {
   }
 });
 
-
 //Dodavanje komentara na recept
 router.post('/recepti/:id/komentari', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    const korisnikId = req.user.id; // Dohvati korisnikov ID iz tokena
+    const korisnikId = req.user.id; 
     const { tekst } = req.body;
 
-    // Dohvati ime korisnika iz kolekcije 'korisnici'
     const korisnici = await getCollection('korisnici');
     const korisnik = await korisnici.findOne({ _id: new ObjectId(korisnikId) });
 
@@ -401,31 +398,31 @@ router.post('/recepti/:id/komentari', authMiddleware, async (req, res) => {
       return res.status(404).json({ message: 'Korisnik nije pronađen.' });
     }
 
-    // Priprema objekta komentara
     const komentari = {
-      _id: new ObjectId(), // Jedinstveni ID za komentar
+      _id: new ObjectId(), 
       tekst,
-      korisnik: new ObjectId(korisnikId), // Korisnikov ID spremiti kao ObjectId
-      korisnikIme: korisnik.name, // Dodaj ime korisnika
-      datum: new Date(), // Dodaj trenutni datum
+      korisnik: new ObjectId(korisnikId), 
+      korisnikIme: korisnik.name, 
+      datum: new Date(), 
     };
 
     const recepti = await getCollection('recepti');
     const result = await recepti.updateOne(
-      { _id: new ObjectId(id) }, // Recept ID mora biti ObjectId
-      { $push: { komentari } } // Dodaj komentar u polje 'komentari'
+      { _id: new ObjectId(id) }, 
+      { $push: { komentari } } 
     );
 
     if (result.modifiedCount === 0) {
       return res.status(404).json({ message: 'Recept nije pronađen.' });
     }
 
-    res.status(201).json(komentari); // Vrati dodani komentar kao odgovor
+    res.status(201).json(komentari); 
   } catch (error) {
     console.error('Greška pri dodavanju komentara:', error);
     res.status(500).json({ message: 'Došlo je do greške na serveru.' });
   }
 });
+
 //Brisanje komentara na recept
 router.delete('/recepti/:id/komentari/:komentarId', authMiddleware, async (req, res) => {
   try {
@@ -440,11 +437,11 @@ router.delete('/recepti/:id/komentari/:komentarId', authMiddleware, async (req, 
     const result = await recepti.updateOne(
       {
         _id: new ObjectId(id),
-        "komentari._id": new ObjectId(komentarId), // Provjera ID-a komentara
-        "komentari.korisnik": new ObjectId(korisnikId), // Provjera korisnika
+        "komentari._id": new ObjectId(komentarId), 
+        "komentari.korisnik": new ObjectId(korisnikId), 
       },
       {
-        $pull: { komentari: { _id: new ObjectId(komentarId) } }, // Uklanjanje komentara
+        $pull: { komentari: { _id: new ObjectId(komentarId) } },
       }
     );
     
@@ -472,14 +469,14 @@ router.get('/recepti/:id/komentari', async (req, res) => {
     const recepti = await getCollection('recepti');
     const recept = await recepti.findOne(
       { _id: new ObjectId(id) },
-      { projection: { komentari: 1, _id: 0 } } // Dohvaća samo komentare
+      { projection: { komentari: 1, _id: 0 } } 
     );
 
     if (!recept || !recept.komentari) {
       return res.status(404).json({ message: 'Recept nije pronađen ili nema komentara.' });
     }
 
-    res.status(200).json(recept.komentari); // Direktno šalje komentare
+    res.status(200).json(recept.komentari);
   } catch (error) {
     console.error('Greška pri dohvaćanju komentara:', error);
     res.status(500).json({ message: 'Došlo je do greške na serveru.' });

@@ -11,10 +11,8 @@ router.get('/', authMiddleware, async (req, res) => {
     const userId = req.user.id;
     const collection = await getCollection('shoppingLista');
 
-    // Pronađi shopping listu korisnika
     const shoppingList = await collection.findOne({ userId: new mongodb.ObjectId(userId) });
 
-    // Ako lista ne postoji, vrati praznu
     if (!shoppingList) {
       return res.status(200).json({ items: [] });
     }
@@ -33,7 +31,6 @@ router.post('/', authMiddleware, async (req, res) => {
     const userId = req.user.id;
     const collection = await getCollection('shoppingLista');
 
-    // Pronađi ili kreiraj shopping listu korisnika
     let shoppingList = await collection.findOne({ userId: new mongodb.ObjectId(userId) });
     if (!shoppingList) {
       shoppingList = {
@@ -45,11 +42,9 @@ router.post('/', authMiddleware, async (req, res) => {
       await collection.insertOne(shoppingList);
     }
 
-    // Dodaj novu stavku
     const newItem = { id: new mongodb.ObjectId(), name, completed };
     shoppingList.items.push(newItem);
 
-    // Ažuriraj shopping listu u bazi
     await collection.updateOne(
       { userId: new mongodb.ObjectId(userId) },
       { $set: { items: shoppingList.items, updatedAt: new Date() } }
@@ -99,16 +94,13 @@ router.delete('/completed', authMiddleware, async (req, res) => {
     const userId = req.user.id;
     const collection = await getCollection('shoppingLista');
 
-    // Pronađi shopping listu korisnika
     const shoppingList = await collection.findOne({ userId: new mongodb.ObjectId(userId) });
     if (!shoppingList) {
       return res.status(404).json({ message: 'Shopping lista nije pronađena' });
     }
 
-    // Filtriraj stavke koje nisu označene
     shoppingList.items = shoppingList.items.filter((item) => !item.completed);
 
-    // Spremi promjene u bazi
     await collection.updateOne(
       { userId: new mongodb.ObjectId(userId) },
       { $set: { items: shoppingList.items, updatedAt: new Date() } }
