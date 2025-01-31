@@ -34,7 +34,7 @@ mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
     app.listen(port, () => {
-      console.log(`Server je pokrenut na http://localhost:${port}`);
+      console.log(`Server je pokrenut na https://wa-backend-he0u.onrender.com`);
     })
   })
   .catch((error) => console.error('Error kod spajanja na MongoDB', error));
